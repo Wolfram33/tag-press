@@ -9,6 +9,12 @@
  * - Es kennt KEINE Inhalte
  * - Es reagiert nur auf die vom Grid-Master zugewiesenen Klassen
  *
+ * Farbpalette: helle, freundliche Grün-, Blau-, Braun- und Orange-Töne
+ * (WCAG AA). Bedienelemente sind farblich klar unterscheidbar:
+ *   - Links / Navigation → Blau
+ *   - Buttons / Aktionen → Orange
+ *   - Hinweise / Flächen → Braun-/Beige-Töne
+ *
  * @author Rob de Roy
  * @version 0.2
  * @license MIT
@@ -20,23 +26,29 @@
 
 :root {
     /* Farben - WCAG AA konform */
-    --color-bg-primary: #0f0f23;
-    --color-bg-secondary: #1a1a2e;
-    --color-bg-tertiary: #16213e;
-    --color-accent: #e94560;
-    --color-accent-light: #ff6b6b;
-    --color-text-primary: #eee;
-    --color-text-secondary: #aaa;
-    --color-text-muted: #888;  /* Verbessert von #666 für besseren Kontrast */
-    --color-border: #333;
-    
-    /* Accessibility Farben */
-    --color-focus: #4a9eff;
-    --color-focus-outline: rgba(74, 158, 255, 0.5);
+    --color-bg: #faf7f2;               /* warmes Weiß */
+    --color-surface: #ffffff;
+    --color-beige: #f3e8d9;            /* hervorgehobene Flächen */
+    --color-note-bg: #fdf3e3;
+    --color-text: #2b2117;             /* dunkles Braun */
+    --color-text-invert: #ffffff;
+    --color-text-muted: #5f4b33;       /* Braun, AA auf hellem Grund */
+    --color-blue: #175d87;             /* Links, Navigation */
+    --color-blue-dark: #0d3b5c;
+    --color-blue-light: #a8d5f2;       /* helles Blau auf dunklem Grund */
+    --color-green: #2e6b34;            /* Akzente, Listen */
+    --color-orange: #b45309;           /* Buttons, Fokus */
+    --color-orange-dark: #8a3e06;
+    --color-brown: #6b4a2b;            /* Ränder, Sekundäres */
+    --color-border: #d9cbb8;
 
-    /* Typografie */
-    --font-primary: 'Segoe UI', system-ui, -apple-system, sans-serif;
-    --font-mono: 'Fira Code', 'Courier New', monospace;
+    /* Accessibility Farben */
+    --color-focus: var(--color-orange);
+    --color-focus-outline: rgba(180, 83, 9, 0.35);
+
+    /* Typografie (lokale Systemschriften, keine Webfonts) */
+    --font-primary: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+    --font-mono: ui-monospace, 'Cascadia Mono', Consolas, 'Courier New', monospace;
     --font-size-base: 1rem;
     --font-size-lg: 1.25rem;
     --font-size-xl: 2rem;
@@ -78,7 +90,7 @@ html {
     html {
         scroll-behavior: auto;
     }
-    
+
     *,
     *::before,
     *::after {
@@ -92,9 +104,15 @@ body {
     font-family: var(--font-primary);
     font-size: var(--font-size-base);
     line-height: var(--line-height);
-    color: var(--color-text-primary);
-    background: var(--color-bg-primary);
+    color: var(--color-text);
+    background: var(--color-bg);
     min-height: 100vh;
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+    display: block;
 }
 
 /* ============================================
@@ -108,8 +126,8 @@ body {
     left: 0;
     z-index: 10000;
     padding: var(--spacing-sm) var(--spacing-md);
-    background: var(--color-accent);
-    color: white;
+    background: var(--color-blue-dark);
+    color: var(--color-text-invert);
     text-decoration: none;
     font-weight: bold;
     border-radius: 0 0 var(--border-radius) 0;
@@ -128,6 +146,7 @@ button:focus,
 input:focus,
 select:focus,
 textarea:focus,
+summary:focus,
 [tabindex]:focus {
     outline: 3px solid var(--color-focus);
     outline-offset: 2px;
@@ -137,14 +156,16 @@ textarea:focus,
 /* Focus-visible Support (nur bei Keyboard-Navigation) */
 a:focus:not(:focus-visible),
 button:focus:not(:focus-visible),
-input:focus:not(:focus-visible) {
+input:focus:not(:focus-visible),
+summary:focus:not(:focus-visible) {
     outline: none;
     box-shadow: none;
 }
 
 a:focus-visible,
 button:focus-visible,
-input:focus-visible {
+input:focus-visible,
+summary:focus-visible {
     outline: 3px solid var(--color-focus);
     outline-offset: 2px;
     box-shadow: 0 0 0 4px var(--color-focus-outline);
@@ -170,7 +191,7 @@ input:focus-visible {
 
 /* Verbesserte Link-Erkennbarkeit */
 a {
-    color: var(--color-accent-light);
+    color: var(--color-blue);
     text-decoration: underline;
     text-decoration-thickness: 2px;
     text-underline-offset: 3px;
@@ -179,21 +200,62 @@ a {
 
 a:hover,
 a:focus {
-    color: var(--color-accent);
+    color: var(--color-blue-dark);
     text-decoration-thickness: 3px;
 }
 
 /* High Contrast Mode Support */
-@media (prefers-contrast: high) {
+@media (prefers-contrast: more) {
     :root {
-        --color-text-primary: #fff;
-        --color-text-secondary: #ddd;
-        --color-border: #666;
+        --color-text: #000;
+        --color-text-muted: #3d2f1f;
+        --color-border: #6b4a2b;
     }
-    
+
     a {
         text-decoration-thickness: 3px;
     }
+}
+
+/* ============================================
+   Navigation
+   ============================================ */
+
+.tag-press-nav {
+    background: var(--color-blue);
+}
+
+.tag-press-nav ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    max-width: var(--container-max-width);
+    margin: 0 auto;
+    padding: 0 var(--spacing-sm);
+    list-style: none;
+}
+
+.tag-press-nav a {
+    display: block;
+    padding: 0.9rem 1.25rem;    /* touch-freundliche Klickfläche */
+    color: var(--color-text-invert);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.tag-press-nav a:hover,
+.tag-press-nav a:focus {
+    background: var(--color-blue-dark);
+    color: var(--color-text-invert);
+    text-decoration: underline;
+}
+
+/* Aktive Seite: Farbe UND Unterstreichung (Information nie nur über Farbe) */
+.tag-press-nav a[aria-current="page"] {
+    background: var(--color-blue-dark);
+    text-decoration: underline;
+    text-underline-offset: 0.3em;
+    text-decoration-thickness: 2px;
 }
 
 /* ============================================
@@ -211,42 +273,33 @@ a:focus {
 .zone {
     width: 100%;
     padding: var(--spacing-lg) var(--spacing-md);
+    position: relative;
 }
 
-/* Z1 - Hero Zone */
-.zone.Z1,
+/* Hero Zone: Blau-Grün-Verlauf mit hellem Text (Kontrast AA) */
 .zone-hero {
-    min-height: 500px;
+    min-height: 420px;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     text-align: center;
-    background: linear-gradient(135deg, var(--color-bg-secondary) 0%, var(--color-bg-tertiary) 100%);
+    color: var(--color-text-invert);
     padding: var(--spacing-xl) var(--spacing-md);
-    position: relative;
     overflow: hidden;
 }
 
-.zone.Z1::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background:
-        radial-gradient(circle at 20% 80%, rgba(233, 69, 96, 0.1) 0%, transparent 50%),
-        radial-gradient(circle at 80% 20%, rgba(233, 69, 96, 0.05) 0%, transparent 50%);
-    pointer-events: none;
+.bg-gradient {
+    background: linear-gradient(135deg, var(--color-blue) 0%, var(--color-green) 100%);
 }
 
-/* Z2 - Hauptinhaltsbereich */
-.zone.Z2,
+.zone-hero a {
+    color: var(--color-text-invert);
+}
+
+/* Hauptinhaltsbereich */
 .zone-main {
-    background: var(--color-bg-primary);
-    max-width: var(--container-max-width);
-    margin: 0 auto;
+    background: var(--color-bg);
 }
 
 .grid-container {
@@ -255,19 +308,11 @@ a:focus {
     gap: var(--spacing-md);
 }
 
-@media (max-width: 768px) {
-    .grid-container {
-        grid-template-columns: 1fr;
-    }
-}
-
-/* Z3 - Sekundärbereich */
-.zone.Z3,
+/* Sekundärbereich */
 .zone-secondary {
-    background: var(--color-bg-secondary);
-    max-width: var(--container-max-width);
-    margin: 0 auto;
+    background: var(--color-surface);
     border-radius: var(--border-radius);
+    border: 1px solid var(--color-border);
 }
 
 .flow-container {
@@ -276,14 +321,12 @@ a:focus {
     gap: var(--spacing-sm);
 }
 
-/* Z4 - Abschlussbereich */
-.zone.Z4,
+/* Hervorgehobener Abschlussbereich */
 .zone-footer {
-    background: linear-gradient(135deg, var(--color-bg-tertiary) 0%, var(--color-bg-secondary) 100%);
+    background: var(--color-beige);
     text-align: center;
-    max-width: var(--container-max-width);
-    margin: 0 auto;
     border-radius: var(--border-radius);
+    border-top: 4px solid var(--color-brown);
 }
 
 .highlight-section {
@@ -313,6 +356,20 @@ a:focus {
     object-fit: cover;
 }
 
+.object-image figcaption {
+    margin-top: var(--spacing-xs);
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+}
+
+.zone-hero .object-image {
+    max-width: 40rem;
+}
+
+.zone-hero .object-image img {
+    max-height: 300px;
+}
+
 .img-responsive {
     max-width: 100%;
     height: auto;
@@ -331,50 +388,64 @@ a:focus {
     font-size: var(--font-size-xxl);
     font-weight: 700;
     letter-spacing: -0.02em;
-    color: var(--color-text-primary);
     margin-bottom: var(--spacing-sm);
 }
 
 .object-text.role-subheading {
     font-size: var(--font-size-xl);
     font-weight: 600;
-    color: var(--color-text-primary);
+    color: var(--color-blue-dark);
     margin-bottom: var(--spacing-sm);
+}
+
+.zone-hero .object-text.role-subheading {
+    color: var(--color-text-invert);
 }
 
 .object-text.role-intro {
     font-size: var(--font-size-lg);
-    color: var(--color-text-secondary);
-    max-width: 600px;
+    max-width: 640px;
 }
 
+/* Feature-Karten im Grid: heller Karton mit grünem Akzent */
 .object-text.role-paragraph {
     font-size: var(--font-size-base);
-    color: var(--color-text-secondary);
-    background: var(--color-bg-tertiary);
+    background: var(--color-surface);
     padding: var(--spacing-md);
     border-radius: var(--border-radius);
-    border-left: 3px solid var(--color-accent);
+    border-left: 4px solid var(--color-green);
+    border-top: 1px solid var(--color-border);
+    border-right: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.zone-footer .object-text.role-paragraph,
+.zone-hero .object-text.role-paragraph {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .object-text.role-note {
-    font-size: 0.9rem;
-    color: var(--color-text-muted);
-    font-style: italic;
-    padding: var(--spacing-sm);
-    background: var(--color-bg-secondary);
-    border-radius: var(--border-radius);
+    font-size: 0.95rem;
+    background: var(--color-note-bg);
+    border-left: 4px solid var(--color-orange);
+    padding: var(--spacing-sm) 1.25rem;
+    border-radius: 0 var(--border-radius) var(--border-radius) 0;
 }
 
 /* Listen-Objekte */
 .object-list {
     list-style-position: inside;
     padding-left: var(--spacing-sm);
+    max-width: 70ch;
+    text-align: left;
 }
 
 .object-list li {
     padding: var(--spacing-xs) 0;
-    color: var(--color-text-secondary);
     border-bottom: 1px solid var(--color-border);
 }
 
@@ -382,17 +453,28 @@ a:focus {
     border-bottom: none;
 }
 
-.list-styled {
+ul.list-styled {
     list-style: none;
+    padding-left: 0;
 }
 
-.list-styled li::before {
+ul.list-styled li::before {
     content: '→ ';
-    color: var(--color-accent);
+    color: var(--color-green);
     font-weight: bold;
 }
 
-/* Aktions-Objekte */
+ol.list-styled {
+    padding-left: var(--spacing-md);
+    list-style-position: outside;
+}
+
+ol.list-styled li::marker {
+    color: var(--color-green);
+    font-weight: bold;
+}
+
+/* Aktions-Objekte: Links (Blau) und Buttons (Orange) klar unterscheidbar */
 .object-action {
     display: inline-block;
     text-decoration: none;
@@ -401,42 +483,47 @@ a:focus {
 }
 
 .action-link {
-    color: var(--color-accent);
-    border-bottom: 2px solid transparent;
+    color: var(--color-blue);
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+    padding: var(--spacing-xs) 0.25rem;    /* touch-freundlich */
 }
 
 .action-link:hover {
-    color: var(--color-accent-light);
-    border-bottom-color: var(--color-accent-light);
+    color: var(--color-blue-dark);
+    text-decoration-thickness: 3px;
 }
 
 .action-button {
-    background: var(--color-accent);
-    color: var(--color-text-primary);
+    background: var(--color-orange);
+    color: var(--color-text-invert);
     padding: var(--spacing-sm) var(--spacing-md);
-    border: none;
+    border: 2px solid var(--color-orange-dark);
     border-radius: var(--border-radius);
     cursor: pointer;
     font-size: var(--font-size-base);
     font-family: var(--font-primary);
+    text-decoration: none;
     min-height: 44px; /* Touch-Target Größe für mobile Geräte (WCAG 2.5.5) */
     min-width: 44px;
 }
 
-.action-button:hover {
-    background: var(--color-accent-light);
+.zone-hero .action-button,
+.zone-footer .action-button {
+    color: var(--color-text-invert);
+}
+
+.action-button:hover,
+.action-button:focus {
+    background: var(--color-orange-dark);
+    color: var(--color-text-invert);
+    text-decoration: underline;    /* Hover nicht nur über Farbe */
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(233, 69, 96, 0.3);
+    box-shadow: 0 4px 12px var(--color-focus-outline);
 }
 
 .action-button:active {
     transform: translateY(0);
-}
-
-/* Verbesserte Zugänglichkeit für Buttons */
-.action-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
 }
 
 /* Größeres Touch-Target für Links auf mobilen Geräten */
@@ -456,24 +543,23 @@ a:focus {
 .tag-press-footer {
     text-align: center;
     padding: var(--spacing-lg) var(--spacing-md);
-    background: var(--color-bg-secondary);
-    border-top: 1px solid var(--color-border);
-    color: var(--color-text-muted);
+    background: var(--color-blue-dark);
+    color: var(--color-text-invert);
     font-size: 0.9rem;
 }
 
 .tag-press-footer a {
-    color: var(--color-accent);
-    text-decoration: none;
+    color: var(--color-blue-light);
+    text-decoration: underline;
     transition: color var(--transition-speed);
 }
 
 .tag-press-footer a:hover {
-    color: var(--color-accent-light);
+    color: var(--color-text-invert);
 }
 
 .tag-press-footer strong {
-    color: var(--color-text-secondary);
+    color: var(--color-text-invert);
 }
 
 /* ============================================
@@ -489,6 +575,10 @@ a:focus {
     .zone {
         padding: var(--spacing-md) var(--spacing-sm);
     }
+
+    .grid-container {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
 
 @media (max-width: 768px) {
@@ -498,10 +588,12 @@ a:focus {
         --spacing-lg: 3rem;
     }
 
-    .zone.Z1 {
-        min-height: 400px;
+    .zone-hero {
+        min-height: 340px;
     }
 
+    .grid-container,
+    .grid-cols-2,
     .grid-cols-3 {
         grid-template-columns: 1fr;
     }
@@ -533,15 +625,159 @@ a:focus {
     max-width: 65ch;
 }
 
-.bg-gradient {
-    background: linear-gradient(135deg, var(--color-bg-secondary), var(--color-bg-tertiary));
+.zone-hero .prose,
+.zone-footer .prose {
+    margin-left: auto;
+    margin-right: auto;
 }
 
 /* ============================================
-   Entwickler-Kommentare (für Debugging)
+   Fehlerseite (kein Inline-CSS in index.php)
    ============================================ */
 
-/* Zonen-Markierung für Entwicklung */
+.tag-press-error-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: var(--spacing-md) var(--spacing-sm);
+    background: var(--color-bg);
+}
+
+.error-container {
+    width: 100%;
+    max-width: 800px;
+    padding: var(--spacing-md);
+    background: var(--color-surface);
+    border: 2px solid var(--color-orange);
+    border-radius: var(--border-radius);
+}
+
+.error-title {
+    margin: 0 0 var(--spacing-sm) 0;
+    font-size: 1.4rem;
+    color: var(--color-orange-dark);
+}
+
+.error-message {
+    padding: var(--spacing-sm);
+    background: var(--color-beige);
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-x: auto;
+}
+
+.error-hint {
+    margin-top: 1.5rem;
+    padding-top: var(--spacing-sm);
+    border-top: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+}
+
+.error-hint ul {
+    margin: var(--spacing-xs) 0 var(--spacing-xs) 1.5rem;
+}
+
+.error-hint code {
+    padding: 0.15rem 0.4rem;
+    background: var(--color-beige);
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    color: var(--color-orange-dark);
+}
+
+/* ============================================
+   Debug-Panel (kein Inline-CSS in Config.php)
+   ============================================ */
+
+.tag-press-debug-panel {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    z-index: 9999;
+    max-width: min(600px, calc(100vw - 2rem));
+    max-height: 80vh;
+    overflow: auto;
+    background: #21313d;
+    color: #f2ede4;
+    border: 1px solid var(--color-blue-dark);
+    border-radius: var(--border-radius);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.tag-press-debug-panel summary {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    background: var(--color-blue-dark);
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+    font-weight: bold;
+}
+
+.tag-press-debug-panel[open] summary {
+    border-bottom: 1px solid var(--color-blue);
+}
+
+.tag-press-debug-panel .debug-content {
+    padding: 1rem;
+}
+
+.tag-press-debug-panel .debug-section {
+    margin-bottom: 1rem;
+}
+
+.tag-press-debug-panel .debug-section:last-child {
+    margin-bottom: 0;
+}
+
+.tag-press-debug-panel h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #f0a860;    /* helles Orange auf dunklem Grund */
+}
+
+.tag-press-debug-panel table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.tag-press-debug-panel td,
+.tag-press-debug-panel th {
+    padding: 0.25rem 0.5rem;
+    text-align: left;
+    border-bottom: 1px solid #3a4d5c;
+}
+
+.tag-press-debug-panel th {
+    color: #c9c2b6;
+    font-weight: normal;
+}
+
+.tag-press-debug-panel .path {
+    color: #c9c2b6;
+    font-size: 10px;
+    word-break: break-all;
+}
+
+.tag-press-debug-panel .ok {
+    color: #7fd08a;
+}
+
+.tag-press-debug-panel .error {
+    color: #f0a860;
+}
+
+/* ============================================
+   Entwickler-Marker (nur bei Hover sichtbar)
+   ============================================ */
+
 [data-zone]::after {
     content: attr(data-zone);
     position: absolute;
@@ -556,24 +792,4 @@ a:focus {
 
 [data-zone]:hover::after {
     opacity: 0.5;
-}
-
-/* Objekt-Markierung für Entwicklung */
-[data-object]::before {
-    content: attr(data-object);
-    position: absolute;
-    top: 0.25rem;
-    left: 0.25rem;
-    font-size: 0.65rem;
-    font-family: var(--font-mono);
-    color: var(--color-accent);
-    opacity: 0;
-    background: var(--color-bg-primary);
-    padding: 0.1rem 0.3rem;
-    border-radius: 3px;
-    transition: opacity var(--transition-speed);
-}
-
-[data-object]:hover::before {
-    opacity: 0.7;
 }

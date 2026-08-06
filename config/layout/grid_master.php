@@ -47,10 +47,18 @@ return [
     */
 
     'zones' => [
+        // Globale Zuordnung (gilt für alle Seiten, sofern kein
+        // seitenspezifischer Eintrag existiert)
         'Z1' => 'zone-hero full-width bg-gradient',
         'Z2' => 'zone-main container grid-container grid-cols-3',
         'Z3' => 'zone-secondary container flow-container',
         'Z4' => 'zone-footer container highlight-section',
+
+        // Seitenspezifische Zuordnung: 'Seite.Zone' hat Vorrang.
+        // So kann dieselbe Zonen-ID pro Seite anders dargestellt werden.
+        'B.Z2' => 'zone-main container flow-container',
+        'C.Z2' => 'zone-main container flow-container',
+        'C.Z3' => 'zone-footer container highlight-section',
     ],
 
     /*

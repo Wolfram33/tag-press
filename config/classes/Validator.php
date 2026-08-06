@@ -41,7 +41,10 @@ class Validator
     /**
      * Validiert eine komplette Seite
      *
-     * @throws TagPressException bei Validierungsfehlern
+     * Es werden ALLE Fehler gesammelt und gemeinsam gemeldet –
+     * so lässt sich eine Seite in einem Durchgang korrigieren.
+     *
+     * @throws TagPressException bei Validierungsfehlern (mit vollständigem Bericht)
      */
     public function validatePage(string $pageId): bool
     {
@@ -51,35 +54,94 @@ class Validator
         // Prüfe ob Seite existiert
         $page = $this->geometry->getPage($pageId);
         if ($page === null) {
-            throw new TagPressException(
-                "Seite '{$pageId}' ist nicht in der Geometrie definiert",
-                "pages"
-            );
+            $known = $this->geometry->getPageIds();
+            $hint = $this->suggest($pageId, $known);
+            $this->errors[] = "Seite '{$pageId}' ist nicht in der Geometrie definiert. "
+                . "Definierte Seiten: " . implode(', ', $known) . "." . $hint;
+            $this->failWithReport($pageId);
         }
 
         // Prüfe ob Seitenzuweisung existiert
         $assignments = $this->geometry->getPageAssignment($pageId);
         if ($assignments === null) {
-            throw new TagPressException(
-                "Seite '{$pageId}' hat keine Objektzuweisungen",
-                "page_assignments"
-            );
+            $this->errors[] = "Seite '{$pageId}' hat keine Objektzuweisungen (page_assignments)";
+            $this->failWithReport($pageId);
         }
 
         // Validiere jede Zone und ihre Objekte
+        $assignedZones = [];
         foreach ($assignments as $notation) {
-            $parsed = $this->geometry->parseTagNotation($notation);
+            try {
+                $parsed = $this->geometry->parseTagNotation($notation);
+            } catch (TagPressException $e) {
+                $this->errors[] = "Ungültige Tag-Notation '{$notation}' für Seite '{$pageId}' "
+                    . "(erwartet: 'Z1=objekt_a,objekt_b')";
+                continue;
+            }
+
+            if (in_array($parsed['zone'], $assignedZones, true)) {
+                $this->warnings[] = "Zone '{$parsed['zone']}' ist für Seite '{$pageId}' mehrfach zugewiesen";
+            }
+            $assignedZones[] = $parsed['zone'];
+
             $this->validateZone($pageId, $parsed['zone'], $parsed['objects']);
         }
 
+        // Definierte, aber nie zugewiesene Zonen sind vermutlich ein Versehen
+        foreach (array_keys($page['zones'] ?? []) as $definedZone) {
+            if (!in_array($definedZone, $assignedZones, true)) {
+                $this->warnings[] = "Zone '{$definedZone}' ist für Seite '{$pageId}' definiert, "
+                    . "aber in page_assignments nicht zugewiesen";
+            }
+        }
+
         if (!empty($this->errors)) {
-            throw new TagPressException(
-                "Validierung fehlgeschlagen:\n" . implode("\n", $this->errors),
-                "Seite: {$pageId}"
-            );
+            $this->failWithReport($pageId);
         }
 
         return true;
+    }
+
+    /**
+     * Bricht mit vollständigem Validierungsbericht ab
+     *
+     * @throws TagPressException immer
+     */
+    private function failWithReport(string $pageId): never
+    {
+        throw new TagPressException(
+            "Validierung fehlgeschlagen:\n" . $this->getReport(),
+            "Seite: {$pageId}"
+        );
+    }
+
+    /**
+     * Erzeugt einen "Meinten Sie ...?"-Hinweis für Tippfehler
+     *
+     * @param string $input      Der unbekannte Wert
+     * @param array  $candidates Bekannte gültige Werte
+     *
+     * @return string Hinweis-Text oder leerer String
+     */
+    private function suggest(string $input, array $candidates): string
+    {
+        $best = null;
+        $bestDistance = PHP_INT_MAX;
+
+        foreach ($candidates as $candidate) {
+            $distance = levenshtein(strtolower($input), strtolower((string)$candidate));
+            if ($distance < $bestDistance) {
+                $bestDistance = $distance;
+                $best = $candidate;
+            }
+        }
+
+        // Nur vorschlagen wenn die Ähnlichkeit plausibel ist
+        if ($best !== null && $bestDistance <= max(1, (int)(strlen($input) / 3))) {
+            return " Meinten Sie '{$best}'?";
+        }
+
+        return '';
     }
 
     /**
@@ -91,16 +153,29 @@ class Validator
 
         // Prüfe ob Zone in der Seite definiert ist
         if (!isset($page['zones'][$zoneId])) {
-            $this->errors[] = "Zone '{$zoneId}' ist nicht für Seite '{$pageId}' definiert";
+            $known = array_keys($page['zones'] ?? []);
+            $hint = $this->suggest($zoneId, $known);
+            $this->errors[] = "Zone '{$zoneId}' ist nicht für Seite '{$pageId}' definiert. "
+                . "Definierte Zonen: " . implode(', ', $known) . "." . $hint;
             return;
         }
 
         $zoneDef = $page['zones'][$zoneId];
 
-        // Prüfe ob alle Objekte erlaubt sind
         foreach ($objectIds as $objectId) {
-            if (!in_array($objectId, $zoneDef['allowed_objects'])) {
-                $this->errors[] = "Objekt '{$objectId}' ist nicht in Zone '{$zoneId}' erlaubt. Erlaubt: " . implode(', ', $zoneDef['allowed_objects']);
+            // Objekt-IDs werden zu Dateinamen – ungültige Zeichen abfangen
+            if (!DataLoader::isValidObjectId($objectId)) {
+                $this->errors[] = "Ungültige Objekt-ID '{$objectId}' in Zone '{$zoneId}' "
+                    . "(erlaubt: Buchstaben, Ziffern, '_' und '-')";
+                continue;
+            }
+
+            // Optionale Whitelist: Wenn eine Zone 'allowed_objects' definiert,
+            // wird die Zuweisung zusätzlich dagegen geprüft
+            if (isset($zoneDef['allowed_objects'])
+                && !in_array($objectId, $zoneDef['allowed_objects'], true)) {
+                $this->errors[] = "Objekt '{$objectId}' ist nicht in Zone '{$zoneId}' erlaubt. "
+                    . "Erlaubt: " . implode(', ', $zoneDef['allowed_objects']);
             }
 
             // Validiere das Datenobjekt selbst
@@ -116,7 +191,8 @@ class Validator
         try {
             $data = $this->dataLoader->load($objectId);
         } catch (TagPressException $e) {
-            $this->errors[] = $e->getMessage();
+            $hint = $this->suggest($objectId, $this->dataLoader->listObjects());
+            $this->errors[] = $e->getMessage() . "." . $hint;
             return;
         }
 
@@ -124,7 +200,10 @@ class Validator
         $typeDef = $this->geometry->getObjectType($type);
 
         if ($typeDef === null) {
-            $this->errors[] = "Objekttyp '{$type}' ist nicht definiert (Objekt: {$objectId})";
+            $known = array_keys($this->geometry->getObjectTypes());
+            $hint = $this->suggest($type, $known);
+            $this->errors[] = "Objekttyp '{$type}' ist nicht definiert (Objekt: {$objectId}). "
+                . "Definierte Typen: " . implode(', ', $known) . "." . $hint;
             return;
         }
 
@@ -263,6 +342,38 @@ class Validator
             if (isset($data['href']) && trim($data['href']) === '') {
                 $this->errors[] = "Href in '{$objectId}' darf nicht leer sein";
             }
+        }
+
+        // Lokale Bilddateien müssen existieren (deterministisch: kein kaputtes Bild)
+        if (isset($constraints['src_must_exist']) && $constraints['src_must_exist']) {
+            if (isset($data['src']) && is_string($data['src'])) {
+                $this->validateLocalAsset($objectId, $data['src']);
+            }
+        }
+    }
+
+    /**
+     * Prüft ob ein lokaler Asset-Pfad auf eine existierende Datei zeigt
+     *
+     * Externe URLs (http/https) werden nicht geprüft.
+     */
+    private function validateLocalAsset(string $objectId, string $src): void
+    {
+        // Externe URLs und Anker nicht prüfbar
+        if (str_starts_with($src, 'http') || str_starts_with($src, '#')) {
+            return;
+        }
+
+        // Path-Traversal in Pfaden ist immer ein Fehler
+        if (str_contains($src, '..')) {
+            $this->errors[] = "Pfad in '{$objectId}' darf kein '..' enthalten: {$src}";
+            return;
+        }
+
+        $localPath = TAG_PRESS_ROOT . ltrim($src, '/');
+        if (!file_exists($localPath)) {
+            $this->errors[] = "Bilddatei für '{$objectId}' nicht gefunden: {$src} "
+                . "(erwartet unter: {$localPath})";
         }
     }
 

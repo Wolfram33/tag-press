@@ -8,14 +8,15 @@ Webseiten werden durch eine formale Beschreibungssprache definiert und zur Laufz
 
 **Entwickler:** Rob de Roy
 **Website:** [https://robderoy.de](https://robderoy.de)
+**Repository:** [github.com/Wolfram33/Tag-Press](https://github.com/Wolfram33/Tag-Press)
 **Lizenz:** MIT License
-**Version:** 0.1 (Minimal Viable Specification)
+**Version:** 0.2
 
 ---
 
 ## Konzept
 
-Tag-Press ist kein klassisches CMS. Es ist ein **geistiges Trainingsgerät** und Lern-Experimentierrahmen, das Webseiten nicht über Templates oder Datenbanken, sondern über eine formale Beschreibungssprache definiert. Eine Website wird nicht gebaut, sondern *beschrieben*. Rendering ist lediglich die Interpretation dieser Beschreibung.
+Tag-Press begann als **geistiges Trainingsgerät** und Lern-Experimentierrahmen – und ist inzwischen ein System, mit dem sich **echte Websites erstellen** lassen. Eine Website wird nicht gebaut, sondern *beschrieben*. Rendering ist lediglich die Interpretation dieser Beschreibung.
 
 **Ziel:** Eleganz durch Reduktion. Das System ist absichtlich einfach und streng, um klare Denkweisen zu fördern.
 
@@ -38,13 +39,16 @@ Alles basiert auf flachen Dateien (PHP-Arrays). Vollständige Transparenz, Versi
 Keine impliziten Fallbacks. Ungültige Definitionen führen zu hartem Abbruch mit klarer Fehlermeldung. Das System ist korrekt oder es existiert nicht.
 
 ### 4. Validierung zentral
-Jede Seite muss vor Rendering vollständig validiert werden. Fehler sind keine Warnungen, sondern Abbruchbedingungen.
+Jede Seite muss vor Rendering vollständig validiert werden. Fehler sind keine Warnungen, sondern Abbruchbedingungen. Der Validator sammelt **alle** Fehler einer Seite und meldet sie gemeinsam – inklusive „Meinten Sie …?"-Vorschlägen bei Tippfehlern.
 
 ### 5. Minimalismus
 Nur das Nötigste. Erweiterungen nur durch explizite, dokumentierte Regeln.
 
 ### 6. Barrierefreiheit von Anfang an
 Tag-Press generiert semantisches, WCAG 2.1 AA konformes HTML mit vollständiger Keyboard-Navigation, ARIA-Support und Screen Reader Optimierung. [Mehr Details →](ACCESSIBILITY.md)
+
+### 7. Eine Quelle der Wahrheit
+Die Platzierung von Objekten steht **ausschließlich** in den `page_assignments` (Tag-Notation). Seitentitel, Navigation und Sprache kommen aus der Geometrie – nichts wird doppelt gepflegt.
 
 ---
 
@@ -54,15 +58,26 @@ Tag-Press generiert semantisches, WCAG 2.1 AA konformes HTML mit vollständiger 
 tag-press/
 ├── index.php                  # Interpreter (lädt, validiert, rendert)
 ├── assets/
-│   └── styles.css             # Globale Styles
+│   ├── styles.css             # Globale Styles (lokal, keine CDNs)
+│   └── images/                # Lokale Bilder (SVG/JPG/PNG)
+├── bin/
+│   ├── validate.php           # CLI: alle Seiten prüfen (CI-tauglich)
+│   ├── new-object.php         # CLI: Datenobjekt-Gerüst generieren
+│   └── export.php             # CLI: statischer HTML-Export
 ├── config/
+│   ├── Config.php             # Zentrale Pfadauflösung m()
 │   ├── layout/
 │   │   └── grid_master.php    # Physisches Grid (CSS-Klassen, Breakpoints)
 │   └── classes/
-│       └── main_classes.php   # Parser, Validator, Renderer Klassen
+│       ├── main_classes.php   # Parser, DataLoader, Renderer, TagPress
+│       ├── Validator.php      # Zentrale Prüfinstanz
+│       ├── HtmlDocument.php   # Dokument-Gerüst (Head, Navigation, Footer)
+│       └── TagPressException.php
 ├── struktur/
 │   └── main_geometrie.php     # Semantische Geometrie (zentrale Wahrheit)
-└── daten/                     # Inhaltsdateien (o1.php, o2.php, ...)
+├── daten/                     # Inhaltsdateien (sprechende Namen empfohlen)
+└── tests/
+    └── ValidatorTest.php      # Standalone-Testsuite (php tests/ValidatorTest.php)
 ```
 
 ---
@@ -71,45 +86,58 @@ tag-press/
 
 Die Datei `struktur/main_geometrie.php` ist die **zentrale Wahrheit** des Systems. Sie definiert:
 
-- Welche Seiten existieren (A = Startseite, B = Über uns, etc.)
-- Welche Zonen jede Seite hat (Z1, Z2, Z3, ...)
-- Welche Bedeutung jede Zone trägt
-- Welche Objekte in welchen Zonen erlaubt sind (O1, O2, ...)
+- Site-weite Metadaten (`site`: Name, Sprache, Beschreibung, Footer)
+- Welche Seiten existieren – mit Name, **URL-Slug** und Beschreibung
+- Welche Zonen jede Seite hat und welche Bedeutung sie tragen
 - Welche Objekttypen existieren und ihre Pflichtattribute
+- Welche Objekte in welchen Zonen erscheinen (`page_assignments`)
 
 ### Notation
 
 ```
-A,Z1=O1,O2,O3
+'Z1=hero_bild,hero_titel'
 ```
 
-Bedeutet:
-- **A** = Seite (Startseite)
-- **Z1** = Zone (Primärfokusbereich)
-- **O1,O2,O3** = Objekte in dieser Zone (in definierter Reihenfolge)
+Bedeutet: Zone **Z1** enthält die Objekte `hero_bild` und `hero_titel` – in dieser Reihenfolge. Die Objekt-ID ist zugleich der Dateiname: `daten/hero_bild.php`.
+
+**Sprechende Namen sind empfohlen.** Klassische IDs (`O1`, `O2`, …) funktionieren weiterhin, aber `Z1=hero_bild,hero_titel` erklärt sich selbst.
+
+### Seiten und URLs
+
+Jede Seite hat einen Slug für lesbare URLs:
+
+| Aufruf | Ergebnis |
+|--------|----------|
+| `/?page=startseite` | Startseite (per Slug) |
+| `/?page=A` | Startseite (per ID) |
+| `/` | Erste Seite der Geometrie |
+| `/?page=tippfehler` | Fehlerseite 404 mit Liste aller Seiten |
+
+Die **Navigation wird automatisch** aus der Geometrie generiert (mit `aria-current` für die aktive Seite). Seiten mit `'in_nav' => false` erscheinen nicht im Menü.
 
 ### Zonen-Konzept
 
 Eine Zone ist ein **semantischer Raum** mit klarer Funktion. Ihre Bedeutung ist unabhängig von ihrer visuellen Position.
 
-| Zone | Bedeutung |
+| Zone | Bedeutung (Beispiel Startseite) |
 |------|-----------|
 | Z1 | Primärfokusbereich (Hero) |
 | Z2 | Hauptinhaltsbereich |
 | Z3 | Sekundärbereich |
 | Z4 | Abschlussbereich |
 
-### Objekttypen
+Optional kann eine Zone `'allowed_objects'` definieren – dann wird die Zuweisung zusätzlich gegen diese Whitelist validiert.
 
+### Objekttypen
 
 Das System beschränkt sich bewusst auf wenige, klar definierte Typen. Die Attribute und Werte sind formal festgelegt:
 
 | Typ      | Pflichtattribute         | Optionale Attribute | Werte/Details |
 |----------|-------------------------|---------------------|---------------|
-| `image`  | src (url), alt (string, min 5 Zeichen) | title (string), caption (string) | alt darf nicht Dateiname sein |
+| `image`  | src (url), alt (string, min 5 Zeichen) | title (string), caption (string) | alt darf nicht Dateiname sein; lokale Bilddateien müssen existieren |
 | `text`   | content (string), role (enum) | - | role: heading, subheading, intro, paragraph, note |
 | `list`   | items (array, min 1)    | list_type (enum)    | list_type: ordered, unordered |
-| `action` | label (string), href (url) | action_type (enum) | action_type: link, button |
+| `action` | label (string), href (url) | action_type (enum) | action_type: link, button (steuert nur die Optik – gerendert wird immer ein Link) |
 
 **Wichtig:** Ein Bildobjekt ohne Alt-Text existiert in Tag-Press nicht!
 
@@ -121,10 +149,10 @@ Dateien im `daten/`-Verzeichnis enthalten **ausschließlich Inhalte und Metadate
 
 ```php
 <?php
-// daten/o1.php
+// daten/hero_bild.php
 return [
     'type' => 'image',
-    'src' => '/assets/images/hero.jpg',
+    'src' => '/assets/images/hero-banner.svg',
     'alt' => 'Beschreibung des Bildes',
     'title' => 'Optionaler Titel'
 ];
@@ -146,8 +174,8 @@ Der Grid-Master (`config/layout/grid_master.php`) übersetzt semantische Zonen i
 <?php
 return [
     'zones' => [
-        'Z1' => 'zone-hero full-width bg-gradient',
-        'Z2' => 'zone-main container grid-container',
+        'Z1' => 'zone-hero full-width bg-gradient',   // global
+        'B.Z2' => 'zone-main container flow-container', // seitenspezifisch
     ],
     'objects' => [
         'image' => 'img-responsive img-cover',
@@ -161,6 +189,8 @@ Der Grid-Master:
 - Trifft **keine** Bedeutungsentscheidungen
 - Ist ein reiner **Übersetzer** zwischen Geometrie und Darstellung
 
+Ein Eintrag `'B.Z2'` (Seite.Zone) hat Vorrang vor dem globalen `'Z2'` – so kann dieselbe Zonen-ID pro Seite unterschiedlich dargestellt werden, ohne die Geometrie anzufassen.
+
 ---
 
 ## Validierung
@@ -168,19 +198,25 @@ Der Grid-Master:
 Validierung ist ein **zentrales Prinzip**. Geprüft wird:
 
 1. Existiert die angeforderte Seite?
-2. Sind alle Zonen korrekt definiert?
-3. Sind alle Objekte in erlaubten Zonen?
-4. Haben alle Objekte ihre Pflichtattribute?
+2. Sind alle Zonen korrekt definiert und zugewiesen?
+3. Sind alle Objekt-IDs gültig (kein Path-Traversal)?
+4. Haben alle Objekte ihre Pflichtattribute im richtigen Datentyp?
+5. Existieren referenzierte lokale Bilddateien?
 
-Bei Fehlern: **Harter Abbruch** mit präziser Fehlermeldung.
+Bei Fehlern: **Harter Abbruch** mit vollständigem Bericht – alle Fehler und Warnungen einer Seite auf einmal, bei Tippfehlern mit „Meinten Sie …?"-Vorschlag.
+
+```bash
+php bin/validate.php              # alle Seiten prüfen (Exit-Code für CI)
+php bin/validate.php A kontakt    # nur bestimmte Seiten (ID oder Slug)
+```
 
 ---
 
 ## Installation & Verwendung
 
 1. Repository klonen
-2. Webserver auf `index.php` zeigen lassen
-3. Seite aufrufen: `/?page=A` (oder ohne Parameter für Startseite)
+2. Webserver auf `index.php` zeigen lassen (oder statisch exportieren, s.u.)
+3. Seite aufrufen: `/?page=startseite` (oder ohne Parameter für die erste Seite)
 
 ### Lokaler Test
 
@@ -190,6 +226,54 @@ php -S localhost:8080
 ```
 
 Dann im Browser: `http://localhost:8080`
+
+Debug-Panel (Pfade, Cache, geladene Dateien): `http://localhost:8080/?debug=1`
+
+---
+
+## Eigene Website bauen (Schnellstart)
+
+**1. Inhalte anlegen** – Datenobjekt-Gerüste generieren lassen:
+
+```bash
+php bin/new-object.php hero_titel text
+php bin/new-object.php hero_bild image
+```
+
+Der Generator füllt alle Pflichtattribute aus der formalen Grammatik vor und dokumentiert erlaubte Werte. Danach die TODO-Werte in `daten/*.php` ausfüllen.
+
+**2. Seite beschreiben** – in `struktur/main_geometrie.php`:
+
+```php
+'pages' => [
+    'D' => [
+        'name' => 'Leistungen',
+        'slug' => 'leistungen',
+        'zones' => [
+            'Z1' => ['meaning' => 'Überblick über das Angebot'],
+        ],
+    ],
+],
+'page_assignments' => [
+    'D' => ['Z1=hero_titel,hero_bild'],
+],
+```
+
+Titel, Navigation und URL entstehen automatisch – nichts weiter nötig.
+
+**3. Prüfen:**
+
+```bash
+php bin/validate.php
+```
+
+**4. Veröffentlichen** – entweder mit PHP-Hosting (Schritt „Installation") oder als statisches HTML:
+
+```bash
+php bin/export.php
+```
+
+Der Export rendert alle Seiten nach `export/` (`index.html`, `<slug>.html`, Assets inklusive) – lauffähig auf **jedem** Hosting, ganz ohne PHP. Möglich, weil Tag-Press deterministisch ist: gleiche Eingabe, gleiche Ausgabe.
 
 ---
 
@@ -202,13 +286,13 @@ Jeder Azubi schreibt eine Dokumentation: "Was bedeutet Z1 semantisch?"
 Neue Zone oder Objekttyp definieren (muss argumentiert werden!)
 
 ### Phase 3: Validator bauen
-Validierungslogik in `main_classes.php` implementieren
+Validierungslogik nachvollziehen und erweitern (`config/classes/Validator.php`)
 
 ### Phase 4: Renderer erweitern
-Einfache Renderer-Klasse für HTML-Ausgabe
+Renderer-Klasse für neue Objekttypen ergänzen
 
 ### Phase 5: Echte Seite
-Erste vollständige Seite bauen und testen
+Erste vollständige Seite bauen und testen – die Seiten „Über uns" (`/?page=ueber-uns`) und „Kontakt" (`/?page=kontakt`) sind als Referenz bereits umgesetzt
 
 ---
 
@@ -217,20 +301,20 @@ Erste vollständige Seite bauen und testen
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                        index.php                             │
-│                       (Interpreter)                          │
+│          (Interpreter: Slug-Auflösung, Orchestrierung)       │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    GeometryParser                            │
-│              (Lädt main_geometrie.php)                       │
+│    (Lädt main_geometrie.php: Seiten, Slugs, Navigation)      │
 └─────────────────────────────────────────────────────────────┘
                               │
               ┌───────────────┴───────────────┐
               ▼                               ▼
 ┌─────────────────────────┐     ┌─────────────────────────────┐
 │       Validator         │     │        DataLoader           │
-│  (Prüft Regeln)         │     │  (Lädt daten/*.php)         │
+│  (Sammelt ALLE Fehler)  │     │  (Lädt daten/*.php sicher)  │
 └─────────────────────────┘     └─────────────────────────────┘
               │                               │
               └───────────────┬───────────────┘
@@ -242,9 +326,29 @@ Erste vollständige Seite bauen und testen
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                      HTML-Ausgabe                            │
+│                      HtmlDocument                            │
+│   (Head, Navigation, Footer – für Server UND Export)         │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Sicherheit
+
+- Jede Ausgabe wird kontextgerecht escaped (auch Fehlermeldungen)
+- Objekt-IDs und URL-Parameter werden streng validiert (kein Path-Traversal, keine Injection)
+- Kein Inline-JavaScript, kein Inline-CSS – eine strikte Content-Security-Policy ohne `unsafe-inline` ist möglich
+- Keine externen Abhängigkeiten: keine CDNs, keine Webfonts, keine Laufzeit-Paketmanager
+
+---
+
+## Tests
+
+```bash
+php tests/ValidatorTest.php
+```
+
+Die Testsuite läuft standalone (ohne PHPUnit) und prüft Parser, Validator, DataLoader, Renderer, Slug-Auflösung, Navigation und Sicherheits-Prüfungen.
 
 ---
 
@@ -256,6 +360,7 @@ Tag-Press ist kein weiteres CMS, sondern ein **strukturelles Gegenmodell** zu da
 - **Semantisch**: Bedeutung vor Darstellung
 - **Streng**: Fehler werden nicht kaschiert
 - **Lehrreich**: Zwingt zum Nachdenken über Abstraktion
+- **Praktisch**: Vom Beschreiben bis zum statischen Export ohne Datenbank und ohne Build-Toolchain
 
 Wer Tag-Press verstanden hat, versteht automatisch auch andere Systeme besser, weil er gelernt hat, zwischen Bedeutung, Struktur, Darstellung und Daten zu unterscheiden.
 

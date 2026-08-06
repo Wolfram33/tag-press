@@ -2,7 +2,9 @@
 
 ## Hinweis
 
-Diese Seite ist ein **Vorschlag** für eine Kontaktseite. Sie demonstriert, wie eine einfache Seite mit wenigen Zonen aussehen kann.
+Diese Seite ist inzwischen **implementiert** – mit sprechenden Objekt-Namen statt `O20`-`O24` (siehe `struktur/main_geometrie.php`, `page_assignments['C']` und `daten/kontakt_*.php`). Aufrufbar unter `/?page=kontakt`.
+
+Der ursprüngliche Vorschlag unten bleibt als Übungsmaterial erhalten und demonstriert, wie eine einfache Seite mit wenigen Zonen aussehen kann.
 
 ---
 

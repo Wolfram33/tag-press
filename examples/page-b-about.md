@@ -2,7 +2,9 @@
 
 ## Hinweis
 
-Diese Seite ist ein **Vorschlag** für eine "Über uns"-Seite. Sie ist noch nicht in der Geometrie implementiert und dient als Übung für Phase 4.
+Diese Seite ist inzwischen **implementiert** – mit sprechenden Objekt-Namen statt `O11`-`O17` (siehe `struktur/main_geometrie.php`, `page_assignments['B']` und `daten/about_*.php`). Aufrufbar unter `/?page=ueber-uns`.
+
+Der ursprüngliche Vorschlag unten bleibt als Übungsmaterial erhalten: Vergleiche ihn mit der tatsächlichen Umsetzung – was wurde anders gelöst und warum? (Stichworte: eine Quelle der Wahrheit, keine Layout-Properties in der Geometrie, sprechende Namen.)
 
 ---
 

@@ -270,16 +270,23 @@ $runner->run('Test 10: Renderer erzeugt valides HTML', function(TestRunner $t) {
 });
 
 // -----------------------------------------------------------------------------
-// Test 11: Zonen-Validierung funktioniert
+// Test 11: Zonen-Objekte werden aus der Tag-Notation abgeleitet
 // -----------------------------------------------------------------------------
-$runner->run('Test 11: Zonen-Validierung funktioniert', function(TestRunner $t) {
+$runner->run('Test 11: Zonen-Objekte werden aus der Tag-Notation abgeleitet', function(TestRunner $t) {
     $parser = new GeometryParser();
     $geometry = $parser->load();
 
     $pageA = $geometry['pages']['A'];
     $t->assert(isset($pageA['zones']['Z1']), 'Seite A hat Zone Z1');
-    $t->assert(isset($pageA['zones']['Z1']['allowed_objects']), 'Z1 hat allowed_objects');
-    $t->assert(in_array('O1', $pageA['zones']['Z1']['allowed_objects']), 'O1 ist in Z1 erlaubt');
+    $t->assert(isset($pageA['zones']['Z1']['meaning']), 'Z1 hat eine semantische Bedeutung');
+
+    // Einzige Quelle der Wahrheit: page_assignments
+    $zoneObjects = $parser->getZoneObjects('A', 'Z1');
+    $t->assert(in_array('O1', $zoneObjects, true), 'O1 ist Z1 zugewiesen');
+    $t->assert($zoneObjects === ['O1', 'O2', 'O3'], 'Z1-Reihenfolge kommt aus der Tag-Notation');
+
+    $parsed = $parser->getParsedAssignments('A');
+    $t->assert(count($parsed) === 4, 'Seite A hat 4 zugewiesene Zonen');
 });
 
 // -----------------------------------------------------------------------------
@@ -321,7 +328,7 @@ $runner->run('Test 13: Zentrale Config m() Funktion', function(TestRunner $t) {
     // Teste projectInfo()
     $info = projectInfo();
     $t->assert($info['name'] === 'Tag-Press', 'projectInfo enthält Namen');
-    $t->assert($info['version'] === '0.1', 'projectInfo enthält Version');
+    $t->assert($info['version'] === TAG_PRESS_VERSION, 'projectInfo enthält Version');
 });
 
 // -----------------------------------------------------------------------------
@@ -427,6 +434,113 @@ $runner->run('Test 20: Debug-Panel generiert HTML', function(TestRunner $t) {
     $t->assert(str_contains($panel, 'Tag-Press'), 'Panel zeigt Projektnamen');
     $t->assert(str_contains($panel, 'Cache-Statistiken'), 'Panel zeigt Cache-Info');
     $t->assert(str_contains($panel, 'Pfad-Typen'), 'Panel zeigt Pfad-Typen');
+});
+
+// -----------------------------------------------------------------------------
+// Test 21: Slug-Auflösung funktioniert
+// -----------------------------------------------------------------------------
+$runner->run('Test 21: Slug-Auflösung funktioniert', function(TestRunner $t) {
+    $parser = new GeometryParser();
+    $parser->load();
+
+    $t->assert($parser->resolvePageId('A') === 'A', 'Seiten-ID wird direkt aufgelöst');
+    $t->assert($parser->resolvePageId('startseite') === 'A', "Slug 'startseite' löst zu 'A' auf");
+    $t->assert($parser->resolvePageId('kontakt') === 'C', "Slug 'kontakt' löst zu 'C' auf");
+    $t->assert($parser->resolvePageId('') === 'A', 'Leerer Wert liefert die erste Seite');
+    $t->assert($parser->resolvePageId('gibt-es-nicht') === null, 'Unbekannter Slug liefert null');
+});
+
+// -----------------------------------------------------------------------------
+// Test 22: Navigation wird aus der Geometrie generiert
+// -----------------------------------------------------------------------------
+$runner->run('Test 22: Navigation wird aus der Geometrie generiert', function(TestRunner $t) {
+    $parser = new GeometryParser();
+    $parser->load();
+
+    $nav = $parser->getNavigation();
+    $t->assert(count($nav) >= 3, 'Navigation enthält mindestens 3 Seiten');
+    $t->assert($nav[0]['id'] === 'A', 'Erste Navigationsseite ist A');
+    $t->assert($nav[0]['slug'] === 'startseite', 'Navigationseintrag enthält Slug');
+    $t->assert($nav[0]['name'] === 'Startseite', 'Navigationseintrag enthält Namen');
+});
+
+// -----------------------------------------------------------------------------
+// Test 23: Ungültige Objekt-IDs werden abgelehnt (Path-Traversal-Schutz)
+// -----------------------------------------------------------------------------
+$runner->run('Test 23: Ungültige Objekt-IDs werden abgelehnt', function(TestRunner $t) {
+    $loader = new DataLoader();
+
+    $t->assert(DataLoader::isValidObjectId('hero_bild'), 'Sprechende Objekt-ID ist gültig');
+    $t->assert(DataLoader::isValidObjectId('O1'), 'Klassische Objekt-ID ist gültig');
+    $t->assert(!DataLoader::isValidObjectId('../evil'), 'Path-Traversal wird erkannt');
+    $t->assert(!DataLoader::isValidObjectId('a/b'), 'Pfadtrenner werden erkannt');
+    $t->assert(!DataLoader::isValidObjectId(''), 'Leere ID ist ungültig');
+
+    $t->expectException(
+        fn() => $loader->load('../../etc/passwd'),
+        TagPressException::class,
+        'Path-Traversal beim Laden wirft Exception'
+    );
+});
+
+// -----------------------------------------------------------------------------
+// Test 24: Validator gibt Tippfehler-Vorschläge
+// -----------------------------------------------------------------------------
+$runner->run('Test 24: Validator gibt Tippfehler-Vorschläge', function(TestRunner $t) {
+    $tagPress = new TagPress();
+    $validator = $tagPress->getValidator();
+
+    try {
+        $validator->validatePage('X');
+        $t->assert(false, 'Unbekannte Seite sollte Exception werfen');
+    } catch (TagPressException $e) {
+        $t->assert(
+            str_contains($e->getMessage(), 'Definierte Seiten'),
+            'Fehlermeldung listet definierte Seiten auf'
+        );
+    }
+});
+
+// -----------------------------------------------------------------------------
+// Test 25: Alle definierten Seiten sind gültig und renderbar
+// -----------------------------------------------------------------------------
+$runner->run('Test 25: Alle definierten Seiten sind gültig und renderbar', function(TestRunner $t) {
+    $tagPress = new TagPress();
+
+    foreach ($tagPress->getGeometry()->getPageIds() as $pageId) {
+        $html = $tagPress->render($pageId);
+        $t->assert(str_contains($html, '<section'), "Seite {$pageId} rendert Zonen");
+    }
+});
+
+// -----------------------------------------------------------------------------
+// Test 26: HtmlDocument erzeugt vollständiges, escaptes Dokument
+// -----------------------------------------------------------------------------
+$runner->run('Test 26: HtmlDocument erzeugt vollständiges Dokument', function(TestRunner $t) {
+    $tagPress = new TagPress();
+    $geometry = $tagPress->getGeometry();
+
+    $document = new HtmlDocument($geometry);
+    $html = $document->render('A', '<p>Test</p>');
+
+    $t->assert(str_contains($html, '<!DOCTYPE html>'), 'Dokument hat Doctype');
+    $t->assert(str_contains($html, '<html lang="de">'), 'Sprache ist gesetzt');
+    $t->assert(str_contains($html, '<title>Startseite | Tag-Press</title>'), 'Titel kommt aus der Geometrie');
+    $t->assert(str_contains($html, 'aria-current="page"'), 'Aktive Seite ist markiert');
+    $t->assert(str_contains($html, 'aria-label="Hauptnavigation"'), 'Navigation ist beschriftet');
+    $t->assert(!str_contains($html, '<script'), 'Keine Inline-Scripts (CSP)');
+    $t->assert(!str_contains($html, '<style'), 'Keine Inline-Styles (CSP)');
+
+    // Statischer Modus erzeugt relative Dateinamen
+    $staticDoc = new HtmlDocument($geometry, HtmlDocument::MODE_STATIC);
+    $t->assert(
+        $staticDoc->staticFileName(['id' => 'A', 'slug' => 'startseite']) === 'index.html',
+        'Erste Seite wird zu index.html'
+    );
+    $t->assert(
+        $staticDoc->staticFileName(['id' => 'C', 'slug' => 'kontakt']) === 'kontakt.html',
+        'Weitere Seiten werden zu <slug>.html'
+    );
 });
 
 // -----------------------------------------------------------------------------

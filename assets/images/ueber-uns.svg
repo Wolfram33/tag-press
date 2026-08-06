@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 360">
+  <!-- Über Tag-Press: Struktur, Daten und Darstellung als getrennte Bausteine -->
+  <rect width="800" height="360" fill="#f3e8d9"/>
+
+  <!-- Baustein: Struktur -->
+  <g>
+    <rect x="60" y="100" width="180" height="160" rx="14" fill="#175d87"/>
+    <rect x="85" y="130" width="130" height="16" rx="8" fill="#a8d5f2"/>
+    <rect x="85" y="160" width="100" height="16" rx="8" fill="#a8d5f2"/>
+    <rect x="85" y="190" width="115" height="16" rx="8" fill="#a8d5f2"/>
+    <text x="150" y="292" text-anchor="middle" font-family="system-ui, Arial, sans-serif" font-size="20" font-weight="bold" fill="#2b2117">Struktur</text>
+  </g>
+
+  <!-- Baustein: Daten -->
+  <g>
+    <rect x="310" y="100" width="180" height="160" rx="14" fill="#2e6b34"/>
+    <circle cx="360" cy="150" r="18" fill="#c9e7cd"/>
+    <rect x="390" y="140" width="75" height="14" rx="7" fill="#c9e7cd"/>
+    <rect x="335" y="185" width="130" height="14" rx="7" fill="#c9e7cd"/>
+    <rect x="335" y="212" width="105" height="14" rx="7" fill="#c9e7cd"/>
+    <text x="400" y="292" text-anchor="middle" font-family="system-ui, Arial, sans-serif" font-size="20" font-weight="bold" fill="#2b2117">Daten</text>
+  </g>
+
+  <!-- Baustein: Darstellung -->
+  <g>
+    <rect x="560" y="100" width="180" height="160" rx="14" fill="#b45309"/>
+    <rect x="585" y="130" width="60" height="45" rx="6" fill="#fdf3e3"/>
+    <rect x="655" y="130" width="60" height="45" rx="6" fill="#fdf3e3"/>
+    <rect x="585" y="185" width="130" height="45" rx="6" fill="#fdf3e3"/>
+    <text x="650" y="292" text-anchor="middle" font-family="system-ui, Arial, sans-serif" font-size="20" font-weight="bold" fill="#2b2117">Darstellung</text>
+  </g>
+
+  <!-- Verbindungen -->
+  <g stroke="#6b4a2b" stroke-width="4" fill="none">
+    <line x1="240" y1="180" x2="310" y2="180"/>
+    <line x1="490" y1="180" x2="560" y2="180"/>
+  </g>
+  <g fill="#6b4a2b">
+    <polygon points="310,180 296,172 296,188"/>
+    <polygon points="560,180 546,172 546,188"/>
+  </g>
+</svg>

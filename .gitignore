@@ -1,0 +1,9 @@
+# Statischer Export (generiert mit php bin/export.php)
+/export/
+
+# Temporäre Testdaten
+/tests/test-data/
+
+# Editor- und Systemdateien
+.DS_Store
+Thumbs.db

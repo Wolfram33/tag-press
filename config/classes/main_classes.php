@@ -29,6 +29,7 @@ require_once __DIR__ . '/../Config.php';
 // Lade modulare Komponenten via m()
 require_once m('classes', 'TagPressException.php');
 require_once m('classes', 'Validator.php');
+require_once m('classes', 'HtmlDocument.php');
 
 /**
  * GeometryParser
@@ -115,6 +116,103 @@ class GeometryParser
     }
 
     /**
+     * Gibt die Site-Konfiguration mit Standardwerten zurück
+     */
+    public function getSite(): array
+    {
+        $site = $this->geometry['site'] ?? [];
+
+        return [
+            'name' => $site['name'] ?? 'Tag-Press',
+            'language' => $site['language'] ?? 'de',
+            'description' => $site['description'] ?? '',
+            'footer_text' => $site['footer_text'] ?? '',
+        ];
+    }
+
+    /**
+     * Löst eine Seiten-ID oder einen Slug zur Seiten-ID auf
+     *
+     * Erlaubt lesbare URLs: resolvePageId('startseite') → 'A'.
+     * Leerer Wert liefert die erste definierte Seite (Startseite).
+     *
+     * @return string|null Die Seiten-ID oder null wenn unbekannt
+     */
+    public function resolvePageId(string $idOrSlug): ?string
+    {
+        $pages = $this->geometry['pages'] ?? [];
+
+        if ($idOrSlug === '') {
+            $ids = array_keys($pages);
+            return $ids[0] ?? null;
+        }
+
+        if (isset($pages[$idOrSlug])) {
+            return $idOrSlug;
+        }
+
+        foreach ($pages as $id => $page) {
+            if (($page['slug'] ?? '') === $idOrSlug) {
+                return $id;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Gibt die Navigationseinträge zurück
+     *
+     * Seiten mit 'in_nav' => false werden ausgeblendet.
+     *
+     * @return array Liste von ['id', 'name', 'slug']
+     */
+    public function getNavigation(): array
+    {
+        $nav = [];
+
+        foreach ($this->geometry['pages'] ?? [] as $id => $page) {
+            if (($page['in_nav'] ?? true) === false) {
+                continue;
+            }
+            $nav[] = [
+                'id' => $id,
+                'name' => $page['name'] ?? $id,
+                'slug' => $page['slug'] ?? $id,
+            ];
+        }
+
+        return $nav;
+    }
+
+    /**
+     * Gibt die geparsten Zuweisungen einer Seite zurück
+     *
+     * Die Tag-Notation ist die einzige Quelle der Objekt-Platzierung.
+     *
+     * @return array ['Z1' => ['O1', 'O2'], 'Z2' => [...], ...]
+     */
+    public function getParsedAssignments(string $pageId): array
+    {
+        $parsed = [];
+
+        foreach ($this->getPageAssignment($pageId) ?? [] as $notation) {
+            $result = $this->parseTagNotation($notation);
+            $parsed[$result['zone']] = $result['objects'];
+        }
+
+        return $parsed;
+    }
+
+    /**
+     * Gibt die Objekte einer Zone zurück (abgeleitet aus der Tag-Notation)
+     */
+    public function getZoneObjects(string $pageId, string $zoneId): array
+    {
+        return $this->getParsedAssignments($pageId)[$zoneId] ?? [];
+    }
+
+    /**
      * Parst eine Tag-Notation wie "Z1=O1,O2"
      *
      * @return array ['zone' => 'Z1', 'objects' => ['O1', 'O2']]
@@ -173,7 +271,23 @@ class GeometryParser
  */
 class DataLoader
 {
+    /**
+     * Erlaubtes Format für Objekt-IDs.
+     *
+     * Objekt-IDs werden zu Dateinamen – dieses Muster verhindert
+     * Path-Traversal und andere gefährliche Zeichen.
+     */
+    public const OBJECT_ID_PATTERN = '/^[A-Za-z][A-Za-z0-9_-]{0,63}$/';
+
     private array $loadedObjects = [];
+
+    /**
+     * Prüft ob eine Objekt-ID ein gültiges Format hat
+     */
+    public static function isValidObjectId(string $objectId): bool
+    {
+        return preg_match(self::OBJECT_ID_PATTERN, $objectId) === 1;
+    }
 
     /**
      * Lädt ein einzelnes Datenobjekt
@@ -184,6 +298,13 @@ class DataLoader
     {
         if (isset($this->loadedObjects[$objectId])) {
             return $this->loadedObjects[$objectId];
+        }
+
+        if (!self::isValidObjectId($objectId)) {
+            throw new TagPressException(
+                "Ungültige Objekt-ID: '{$objectId}'",
+                "Erlaubt sind Buchstaben, Ziffern, '_' und '-' (Beginn mit Buchstabe, max. 64 Zeichen)"
+            );
         }
 
         $fileName = strtolower($objectId) . '.php';
@@ -233,6 +354,9 @@ class DataLoader
      */
     public function exists(string $objectId): bool
     {
+        if (!self::isValidObjectId($objectId)) {
+            return false;
+        }
         $fileName = strtolower($objectId) . '.php';
         return pathExists('daten', $fileName);
     }
@@ -246,12 +370,14 @@ class DataLoader
     }
 
     /**
-     * Listet alle verfügbaren Objekte auf
+     * Listet alle verfügbaren Objekt-IDs auf
+     *
+     * Objekt-IDs entsprechen den Dateinamen (kleingeschrieben, ohne .php).
      */
     public function listObjects(): array
     {
         $files = listFiles('daten', '*.php');
-        return array_map(fn($f) => strtoupper(pathinfo($f, PATHINFO_FILENAME)), $files);
+        return array_map(fn($f) => pathinfo($f, PATHINFO_FILENAME), $files);
     }
 
     /**
@@ -290,14 +416,12 @@ class Renderer
      */
     public function renderPage(string $pageId): string
     {
-        $assignments = $this->geometry->getPageAssignment($pageId);
         $page = $this->geometry->getPage($pageId);
 
         $html = '';
 
-        foreach ($assignments as $notation) {
-            $parsed = $this->geometry->parseTagNotation($notation);
-            $html .= $this->renderZone($page, $parsed['zone'], $parsed['objects']);
+        foreach ($this->geometry->getParsedAssignments($pageId) as $zoneId => $objectIds) {
+            $html .= $this->renderZone($pageId, $page, $zoneId, $objectIds);
         }
 
         return $html;
@@ -305,11 +429,17 @@ class Renderer
 
     /**
      * Rendert eine Zone mit ihren Objekten
+     *
+     * Grid-Klassen: Ein seitenspezifischer Eintrag 'B.Z3' im Grid-Master
+     * hat Vorrang vor dem globalen Eintrag 'Z3'. So kann dieselbe Zonen-ID
+     * auf verschiedenen Seiten unterschiedlich dargestellt werden.
      */
-    private function renderZone(array $page, string $zoneId, array $objectIds): string
+    private function renderZone(string $pageId, array $page, string $zoneId, array $objectIds): string
     {
         $zoneDef = $page['zones'][$zoneId];
-        $zoneClasses = $this->gridMaster['zones'][$zoneId] ?? '';
+        $zoneClasses = $this->gridMaster['zones']["{$pageId}.{$zoneId}"]
+            ?? $this->gridMaster['zones'][$zoneId]
+            ?? '';
         
         // ARIA-Label für bessere Barrierefreiheit
         $meaning = htmlspecialchars($zoneDef['meaning'], ENT_QUOTES, 'UTF-8');
@@ -426,30 +556,32 @@ class Renderer
 
     /**
      * Rendert ein Aktionsobjekt (Button/Link)
+     *
+     * Aktionen navigieren immer zu einer URL und werden deshalb als
+     * <a>-Element gerendert – ein <button> ohne JavaScript wäre funktionslos.
+     * 'action_type' => 'button' steuert nur die visuelle Darstellung.
      */
     private function renderAction(string $objectId, array $data, string $classes): string
     {
         $label = htmlspecialchars($data['label'], ENT_QUOTES, 'UTF-8');
         $href = htmlspecialchars($data['href'], ENT_QUOTES, 'UTF-8');
         $actionType = $data['action_type'] ?? 'link';
-        
+        $typeClass = $actionType === 'button' ? 'action-button' : 'action-link';
+
         // ARIA-Label für bessere Beschreibung wenn vorhanden
         $ariaLabel = isset($data['aria_label']) ? htmlspecialchars($data['aria_label'], ENT_QUOTES, 'UTF-8') : '';
         $ariaAttr = $ariaLabel ? " aria-label=\"{$ariaLabel}\"" : '';
 
-        if ($actionType === 'button') {
-            $html = "  <button class=\"object object-action action-button {$classes}\" data-object=\"{$objectId}\"{$ariaAttr}>\n";
-            $html .= "    {$label}\n";
-            $html .= "  </button>\n";
-        } else {
-            // Externe Links mit rel="noopener noreferrer" für Sicherheit
-            $isExternal = strpos($href, 'http') === 0 && strpos($href, $_SERVER['HTTP_HOST'] ?? '') === false;
-            $relAttr = $isExternal ? ' rel="noopener noreferrer"' : '';
-            
-            $html = "  <a href=\"{$href}\" class=\"object object-action action-link {$classes}\" data-object=\"{$objectId}\"{$ariaAttr}{$relAttr}>\n";
-            $html .= "    {$label}\n";
-            $html .= "  </a>\n";
-        }
+        // Externe Links mit rel="noopener noreferrer" für Sicherheit.
+        // Ohne Host-Kontext (CLI/Export) gilt jede absolute URL als extern.
+        $host = $_SERVER['HTTP_HOST'] ?? '';
+        $isExternal = str_starts_with($data['href'], 'http')
+            && ($host === '' || !str_contains($data['href'], $host));
+        $relAttr = $isExternal ? ' rel="noopener noreferrer"' : '';
+
+        $html = "  <a href=\"{$href}\" class=\"object object-action {$typeClass} {$classes}\" data-object=\"{$objectId}\"{$ariaAttr}{$relAttr}>\n";
+        $html .= "    {$label}\n";
+        $html .= "  </a>\n";
 
         return $html;
     }

@@ -4,99 +4,126 @@
  *
  * Diese Datei ist die zentrale Wahrheit des Tag-Press Systems.
  * Sie definiert vollständig und abschließend:
- * - Welche Seiten existieren
- * - Welche Zonen jede Seite hat
- * - Welche Bedeutung jede Zone trägt
- * - Welche Objekte in welchen Zonen erlaubt sind
+ * - Site-weite Metadaten (Name, Sprache, Footer)
+ * - Welche Seiten existieren (mit Namen und URL-Slug)
+ * - Welche Zonen jede Seite hat und welche Bedeutung sie tragen
  * - Welche Objekttypen existieren und ihre Pflichtattribute
+ * - Welche Objekte in welchen Zonen erscheinen (page_assignments)
+ *
+ * EINE QUELLE DER WAHRHEIT:
+ * Die Platzierung von Objekten steht AUSSCHLIESSLICH in 'page_assignments'
+ * (Tag-Notation). Zonen beschreiben nur noch ihre semantische Bedeutung.
+ * Optional kann eine Zone 'allowed_objects' definieren – dann wird die
+ * Zuweisung zusätzlich gegen diese Whitelist validiert.
  *
  * WICHTIG: Diese Datei enthält KEIN HTML und KEIN CSS.
- * Sie ist ein Regelwerk, kein Template.
+ * Layout-Angaben gehören in config/layout/grid_master.php.
  *
  * @author Rob de Roy
- * @version 0.1
+ * @version 0.2
  * @license MIT
  */
 
 return [
     /**
+     * Site-weite Metadaten
+     *
+     * 'name'        → erscheint im <title> und im Footer
+     * 'language'    → lang-Attribut des HTML-Dokuments
+     * 'description' → Standard-Meta-Description (Seiten können sie überschreiben)
+     * 'footer_text' → Text im Footer (wird escaped ausgegeben)
+     */
+    'site' => [
+        'name' => 'Tag-Press',
+        'language' => 'de',
+        'description' => 'Ein dateibasiertes, deklaratives Website-System ohne klassische Datenbank.',
+        'footer_text' => 'Ein Projekt von Rob de Roy',
+    ],
+
+    /**
      * Seiten-Definitionen
      *
      * Jede Seite wird durch einen eindeutigen Bezeichner identifiziert.
-     * 'A' = Startseite (Homepage)
-     * Weitere Seiten: 'B' = Über uns, 'C' = Kontakt, etc.
+     * 'slug' erlaubt lesbare URLs: /?page=startseite statt /?page=A
+     * 'in_nav' => false blendet eine Seite aus der Navigation aus.
      */
     'pages' => [
         'A' => [
             'name' => 'Startseite',
+            'slug' => 'startseite',
             'description' => 'Die Haupteinstiegsseite der Website',
             'zones' => [
                 /**
                  * Z1 - Primärfokusbereich (Hero)
-                 *
-                 * Semantische Bedeutung: Der erste, prominenteste Bereich,
-                 * der die Aufmerksamkeit des Besuchers sofort fängt.
-                 * Typischerweise: großes Bild, Hauptüberschrift, Call-to-Action.
+                 * Der erste, prominenteste Bereich, der die Aufmerksamkeit
+                 * des Besuchers sofort fängt.
                  */
                 'Z1' => [
                     'meaning' => 'Primärfokusbereich - Hero-Sektion mit Hauptbotschaft',
-                    'allowed_objects' => ['O1', 'O2', 'O3'],
-                    'order' => ['O1', 'O2', 'O3'],
-                    'properties' => [
-                        'height' => '500px',
-                        'full_width' => true,
-                        'position' => 'top'
-                    ]
                 ],
 
                 /**
                  * Z2 - Hauptinhaltsbereich
-                 *
-                 * Semantische Bedeutung: Der zentrale Inhaltsbereich,
-                 * in dem die Hauptinformationen präsentiert werden.
-                 * Kann mehrere Spalten oder ein Grid enthalten.
+                 * Der zentrale Inhaltsbereich, in dem die
+                 * Hauptinformationen präsentiert werden.
                  */
                 'Z2' => [
                     'meaning' => 'Hauptinhaltsbereich - Zentrale Informationen und Features',
-                    'allowed_objects' => ['O4', 'O5', 'O6'],
-                    'order' => ['O4', 'O5', 'O6'],
-                    'properties' => [
-                        'layout' => 'grid',
-                        'columns' => 3
-                    ]
                 ],
 
                 /**
                  * Z3 - Sekundärbereich
-                 *
-                 * Semantische Bedeutung: Ergänzende Informationen,
-                 * die den Hauptinhalt unterstützen aber nicht dominieren.
+                 * Ergänzende Informationen, die den Hauptinhalt
+                 * unterstützen aber nicht dominieren.
                  */
                 'Z3' => [
                     'meaning' => 'Sekundärbereich - Ergänzende Inhalte und Details',
-                    'allowed_objects' => ['O7', 'O8'],
-                    'order' => ['O7', 'O8'],
-                    'properties' => [
-                        'layout' => 'flow'
-                    ]
                 ],
 
                 /**
                  * Z4 - Abschlussbereich
-                 *
-                 * Semantische Bedeutung: Der abschließende Bereich der Seite,
-                 * typischerweise für Call-to-Actions oder Zusammenfassungen.
+                 * Der abschließende Bereich der Seite, typischerweise
+                 * für Call-to-Actions oder Zusammenfassungen.
                  */
                 'Z4' => [
                     'meaning' => 'Abschlussbereich - Finale Handlungsaufforderung',
-                    'allowed_objects' => ['O9', 'O10'],
-                    'order' => ['O9', 'O10'],
-                    'properties' => [
-                        'highlight' => true
-                    ]
-                ]
-            ]
-        ]
+                ],
+            ],
+        ],
+
+        'B' => [
+            'name' => 'Über uns',
+            'slug' => 'ueber-uns',
+            'description' => 'Informationen über das Projekt und Team',
+            'zones' => [
+                'Z1' => [
+                    'meaning' => 'Einleitungsbereich - Wer wir sind',
+                ],
+                'Z2' => [
+                    'meaning' => 'Geschichte und Hintergrund',
+                ],
+                'Z3' => [
+                    'meaning' => 'Team-Vorstellung',
+                ],
+            ],
+        ],
+
+        'C' => [
+            'name' => 'Kontakt',
+            'slug' => 'kontakt',
+            'description' => 'Kontaktinformationen und Handlungsaufforderung',
+            'zones' => [
+                'Z1' => [
+                    'meaning' => 'Kontakt-Header mit Überschrift',
+                ],
+                'Z2' => [
+                    'meaning' => 'Kontaktdetails',
+                ],
+                'Z3' => [
+                    'meaning' => 'Handlungsaufforderung',
+                ],
+            ],
+        ],
     ],
 
     /**
@@ -151,7 +178,8 @@ return [
                 ]
             ],
             'constraints' => [
-                'alt_not_filename' => true  // Alt-Text darf nicht der Dateiname sein
+                'alt_not_filename' => true,   // Alt-Text darf nicht der Dateiname sein
+                'src_must_exist' => true,     // Lokale Bilddateien müssen existieren
             ]
         ],
 
@@ -212,6 +240,7 @@ return [
          * action - Aktionsobjekt (Button/Link)
          *
          * Typ: interactive (interaktives Element)
+         * Wird immer als Link gerendert; 'button' steuert nur die Optik.
          */
         'action' => [
             'type' => 'interactive',
@@ -244,15 +273,17 @@ return [
     ],
 
     /**
-     * Seitenzuweisungen (Tag-Notation)
+     * Seitenzuweisungen (Tag-Notation) – DIE einzige Quelle der Platzierung
      *
-     * Hier wird festgelegt, welche Objekte in welchen Zonen
-     * einer Seite erscheinen. Die Notation ist deterministisch:
+     * Hier wird festgelegt, welche Objekte in welchen Zonen einer Seite
+     * erscheinen – und in welcher Reihenfolge. Die Notation ist deterministisch:
      *
-     * A,Z1=O1,O2 bedeutet:
-     * - Seite A
-     * - Zone Z1
-     * - Enthält Objekte O1 und O2 (in dieser Reihenfolge)
+     * 'Z1=O1,O2' bedeutet: Zone Z1 enthält die Objekte O1 und O2 (in dieser
+     * Reihenfolge). Objekt-IDs entsprechen Dateinamen in daten/
+     * (kleingeschrieben, ohne .php).
+     *
+     * Sprechende Namen sind erlaubt und empfohlen:
+     * 'Z1=hero_bild,hero_titel' lädt daten/hero_bild.php und daten/hero_titel.php
      */
     'page_assignments' => [
         'A' => [
@@ -260,6 +291,16 @@ return [
             'Z2=O4,O5,O6',
             'Z3=O7,O8',
             'Z4=O9,O10'
+        ],
+        'B' => [
+            'Z1=about_titel,about_intro',
+            'Z2=about_geschichte_titel,about_bild,about_meilensteine',
+            'Z3=about_team_titel,about_team'
+        ],
+        'C' => [
+            'Z1=kontakt_titel,kontakt_intro',
+            'Z2=kontakt_wege',
+            'Z3=kontakt_mitmachen,kontakt_aktion'
         ]
     ]
 ];

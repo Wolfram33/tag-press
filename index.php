@@ -6,10 +6,10 @@
  * Sie orchestriert den gesamten Rendering-Prozess:
  *
  * 1. Lädt die zentrale Config (stellt m() bereit)
- * 2. Lädt die Geometrie via m('struktur', ...)
+ * 2. Löst den page-Parameter auf (Seiten-ID oder Slug)
  * 3. Validiert die Struktur und Daten
- * 4. Bindet die benötigten Objekte ein via m('daten', ...)
- * 5. Übergibt das Ergebnis an den Renderer
+ * 4. Rendert den Seiteninhalt
+ * 5. Übergibt das Ergebnis an HtmlDocument (Dokument-Gerüst)
  *
  * WICHTIG: Diese Datei enthält selbst KEINE Layout- oder Inhaltslogik.
  * Sie ist ein Orchestrator, kein Template.
@@ -36,18 +36,38 @@ require_once __DIR__ . '/config/classes/main_classes.php';
  * Es gibt keine halben Zustände.
  */
 try {
-    // Seiten-ID aus URL oder Standard 'A' (Startseite)
-    $pageId = $_GET['page'] ?? 'A';
+    // page-Parameter ist Nutzereingabe: Format streng prüfen bevor er
+    // irgendwo verwendet wird (Seiten-ID oder Slug, z.B. 'A' oder 'startseite')
+    $pageParam = (string)($_GET['page'] ?? '');
+    if ($pageParam !== '' && !preg_match('/^[A-Za-z0-9_-]{1,64}$/', $pageParam)) {
+        outputError("Ungültiger Seiten-Parameter.", 404);
+    }
 
     // Debug-Modus via URL-Parameter ?debug=1
     $debugMode = isset($_GET['debug']) && $_GET['debug'] === '1';
 
     // Tag-Press initialisieren (nutzt m() intern für alle Pfade)
     $tagPress = new TagPress();
+
+    // Seiten-ID oder Slug auflösen; leer = erste Seite (Startseite)
+    $pageId = $tagPress->getGeometry()->resolvePageId($pageParam);
+    if ($pageId === null) {
+        $known = [];
+        foreach ($tagPress->getGeometry()->getNavigation() as $entry) {
+            $known[] = "{$entry['slug']} ({$entry['id']})";
+        }
+        outputError(
+            "Seite '{$pageParam}' wurde nicht gefunden.\n\nVerfügbare Seiten:\n- " . implode("\n- ", $known),
+            404
+        );
+    }
+
     $content = $tagPress->render($pageId);
 
     // HTML-Dokument ausgeben (mit optionalem Debug-Panel)
-    outputDocument($content, $pageId, $debugMode);
+    $document = new HtmlDocument($tagPress->getGeometry());
+    $debugHtml = $debugMode ? debugPanel(true) : '';
+    echo $document->render($pageId, $content, $debugHtml);
 
 } catch (TagPressException $e) {
     // Tag-Press spezifischer Fehler
@@ -59,58 +79,22 @@ try {
 }
 
 /**
- * Gibt das vollständige HTML-Dokument aus
- *
- * @param string $content   Der gerenderte Seiteninhalt
- * @param string $pageId    Die Seiten-ID
- * @param bool   $showDebug Wenn true, wird das Debug-Panel angezeigt
- */
-function outputDocument(string $content, string $pageId, bool $showDebug = false): void
-{
-    $title = getPageTitle($pageId);
-    $version = TAG_PRESS_VERSION;
-    $cssPath = asset('styles.css');
-
-    // Debug-Panel generieren wenn aktiviert
-    $debugHtml = $showDebug ? debugPanel(true) : '';
-
-    echo <<<HTML
-<!DOCTYPE html>
-<html lang="de">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="generator" content="Tag-Press v{$version}">
-    <title>{$title} | Tag-Press</title>
-    <link rel="stylesheet" href="{$cssPath}">
-</head>
-<body data-page="{$pageId}">
-    <!-- Skip Links für Barrierefreiheit -->
-    <a href="#main-content" class="skip-link">Zum Hauptinhalt springen</a>
-    <a href="#footer-content" class="skip-link">Zum Footer springen</a>
-    
-    <main id="main-content" class="tag-press-main" role="main" aria-label="Hauptinhalt">
-{$content}
-    </main>
-    
-    <footer id="footer-content" class="tag-press-footer" role="contentinfo" aria-label="Seiten-Footer">
-        <p>Powered by <strong>Tag-Press</strong> v{$version} | Ein Projekt von <a href="https://robderoy.de" rel="noopener noreferrer">Rob de Roy</a></p>
-    </footer>
-{$debugHtml}
-</body>
-</html>
-HTML;
-}
-
-/**
- * Gibt eine Fehlerseite aus
+ * Gibt eine Fehlerseite aus und beendet die Ausführung
  *
  * Fehler in Tag-Press sind hart. Die Seite wird nicht gerendert,
  * wenn etwas ungültig ist. Stattdessen wird der Fehler klar angezeigt.
+ * Die Meldung wird escaped ausgegeben – auch Fehlertexte sind Ausgabe.
+ *
+ * @param string $message    Die Fehlermeldung (Klartext)
+ * @param int    $statusCode HTTP-Statuscode (500 für Validierung, 404 für unbekannte Seiten)
  */
-function outputError(string $message): void
+function outputError(string $message, int $statusCode = 500): never
 {
-    http_response_code(500);
+    http_response_code($statusCode);
+
+    $safeMessage = htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
+    $cssPath = htmlspecialchars(asset('styles.css'), ENT_QUOTES, 'UTF-8');
+    $title = $statusCode === 404 ? 'Seite nicht gefunden' : 'Validierungsfehler';
 
     echo <<<HTML
 <!DOCTYPE html>
@@ -118,102 +102,27 @@ function outputError(string $message): void
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fehler | Tag-Press</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier New', monospace;
-            background: #1a1a2e;
-            color: #eee;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-        }
-        .error-container {
-            background: #16213e;
-            border: 2px solid #e94560;
-            border-radius: 8px;
-            padding: 2rem;
-            max-width: 800px;
-            width: 100%;
-        }
-        .error-title {
-            color: #e94560;
-            font-size: 1.5rem;
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .error-title::before {
-            content: '!';
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 1.5rem;
-            height: 1.5rem;
-            background: #e94560;
-            color: #fff;
-            border-radius: 50%;
-            font-weight: bold;
-        }
-        .error-message {
-            background: #0f0f23;
-            padding: 1rem;
-            border-radius: 4px;
-            white-space: pre-wrap;
-            font-size: 0.9rem;
-            line-height: 1.6;
-            overflow-x: auto;
-        }
-        .error-hint {
-            margin-top: 1.5rem;
-            padding-top: 1rem;
-            border-top: 1px solid #333;
-            color: #888;
-            font-size: 0.85rem;
-        }
-        .error-hint code {
-            background: #0f0f23;
-            padding: 0.2rem 0.4rem;
-            border-radius: 3px;
-            color: #e94560;
-        }
-    </style>
+    <title>{$title} | Tag-Press</title>
+    <link rel="stylesheet" href="{$cssPath}">
 </head>
-<body>
-    <div class="error-container">
-        <h1 class="error-title">Tag-Press Validierungsfehler</h1>
-        <pre class="error-message">{$message}</pre>
+<body class="tag-press-error-page">
+    <main class="error-container">
+        <h1 class="error-title">Tag-Press {$title}</h1>
+        <pre class="error-message">{$safeMessage}</pre>
         <div class="error-hint">
             <p>Das System ist korrekt oder es existiert nicht.</p>
-            <p>Pruefen Sie:</p>
-            <ul style="margin-top: 0.5rem; margin-left: 1.5rem;">
+            <p>Prüfen Sie:</p>
+            <ul>
                 <li>Die Geometrie-Definition in <code>struktur/main_geometrie.php</code></li>
                 <li>Die Datenobjekte in <code>daten/*.php</code></li>
                 <li>Die Seitenzuweisungen in <code>page_assignments</code></li>
             </ul>
+            <p>Tipp: <code>php bin/validate.php</code> prüft alle Seiten auf einmal.</p>
         </div>
-    </div>
+    </main>
 </body>
 </html>
 HTML;
 
     exit(1);
-}
-
-/**
- * Ermittelt den Seitentitel basierend auf der Seiten-ID
- */
-function getPageTitle(string $pageId): string
-{
-    $titles = [
-        'A' => 'Startseite',
-        'B' => 'Ueber uns',
-        'C' => 'Kontakt'
-    ];
-
-    return $titles[$pageId] ?? 'Seite ' . $pageId;
 }

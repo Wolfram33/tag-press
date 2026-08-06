@@ -38,7 +38,7 @@ $GLOBALS['TAG_PRESS_LOAD_STATS'] = ['files' => [], 'total' => 0];
 |--------------------------------------------------------------------------
 */
 
-define('TAG_PRESS_VERSION', '0.1');
+define('TAG_PRESS_VERSION', '0.2');
 define('TAG_PRESS_AUTHOR', 'Rob de Roy');
 define('TAG_PRESS_WEBSITE', 'https://robderoy.de');
 define('TAG_PRESS_LICENSE', 'MIT');
@@ -533,68 +533,5 @@ function debugPanel(bool $expanded = false): string
         </section>
     </div>
 </details>
-<style>
-.tag-press-debug-panel {
-    position: fixed;
-    bottom: 1rem;
-    right: 1rem;
-    background: #1a1a2e;
-    color: #eee;
-    border: 1px solid #333;
-    border-radius: 8px;
-    font-family: 'Courier New', monospace;
-    font-size: 12px;
-    max-width: 600px;
-    max-height: 80vh;
-    overflow: auto;
-    z-index: 9999;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-}
-.tag-press-debug-panel summary {
-    padding: 0.75rem 1rem;
-    cursor: pointer;
-    background: #16213e;
-    border-radius: 8px 8px 0 0;
-    font-weight: bold;
-}
-.tag-press-debug-panel[open] summary {
-    border-bottom: 1px solid #333;
-}
-.tag-press-debug-panel .debug-content {
-    padding: 1rem;
-}
-.tag-press-debug-panel .debug-section {
-    margin-bottom: 1rem;
-}
-.tag-press-debug-panel .debug-section:last-child {
-    margin-bottom: 0;
-}
-.tag-press-debug-panel h4 {
-    color: #e94560;
-    margin: 0 0 0.5rem 0;
-    font-size: 11px;
-    text-transform: uppercase;
-}
-.tag-press-debug-panel table {
-    width: 100%;
-    border-collapse: collapse;
-}
-.tag-press-debug-panel td, .tag-press-debug-panel th {
-    padding: 0.25rem 0.5rem;
-    text-align: left;
-    border-bottom: 1px solid #333;
-}
-.tag-press-debug-panel th {
-    color: #888;
-    font-weight: normal;
-}
-.tag-press-debug-panel .path {
-    color: #888;
-    font-size: 10px;
-    word-break: break-all;
-}
-.tag-press-debug-panel .ok { color: #4ade80; }
-.tag-press-debug-panel .error { color: #e94560; }
-</style>
 HTML;
 }
